@@ -235,7 +235,55 @@ const originalSetLang=window.setLang;
 // Existing site uses a lexical setLang function, so use a click listener after its handler.
 document.querySelectorAll('[data-lang]').forEach(b=>b.addEventListener('click',()=>queueMicrotask(refresh)));
 refresh();
-async function downloads(){try{let total=0,page=1,seen=0;while(page<=5){const response=await fetch('https://api.github.com/repos/radek8491-prog/MyVibe/releases?per_page=100&page='+page,{headers:{Accept:'application/vnd.github+json'}});if(!response.ok)throw Error('GitHub '+response.status);const releases=await response.json();if(!Array.isArray(releases))throw Error('Invalid data');for(const release of releases){for(const asset of release.assets||[]){if(/\.apk$/i.test(asset.name||''))total+=Number(asset.download_count||0)}}seen+=releases.length;if(releases.length<100)break;page++}if(!seen)throw Error('No releases');document.querySelector('#mv-count').textContent=new Intl.NumberFormat(document.documentElement.lang).format(total);document.querySelector('#mv-count-status').textContent='GitHub Releases';}catch(e){document.querySelector('#mv-count').textContent='—';document.querySelector('#mv-count').dataset.error='1';document.querySelector('#mv-count-status').textContent=L().unavailable}}
+async function downloads(){
+  const countEl=document.querySelector('#mv-count');
+  const statusEl=document.querySelector('#mv-count-status');
+  const repo='radek8491-prog/MyVibe';
+  const fmt=n=>new Intl.NumberFormat(document.documentElement.lang).format(n);
+  async function github(){
+    let total=0,seen=0;
+    for(let page=1;page<=5;page++){
+      const url='https://api.github.com/repos/'+repo+'/releases?per_page=100&page='+page;
+      const response=await fetch(url,{headers:{Accept:'application/vnd.github+json'},cache:'no-store'});
+      if(!response.ok)throw Error('GitHub API '+response.status);
+      const releases=await response.json();
+      if(!Array.isArray(releases))throw Error('GitHub response');
+      for(const release of releases)for(const asset of release.assets||[])
+        if(/\.apk$/i.test(asset.name||''))total+=Number(asset.download_count||0);
+      seen+=releases.length;
+      if(releases.length<100)break;
+    }
+    if(!seen)throw Error('No releases');
+    return total;
+  }
+  async function shields(){
+    const url='https://img.shields.io/github/downloads/'+repo+'/total.json?cacheSeconds=300';
+    const response=await fetch(url,{cache:'no-store'});
+    if(!response.ok)throw Error('Shields '+response.status);
+    const data=await response.json();
+    const raw=String(data.message||'').trim();
+    const match=raw.match(/^([\d.,\s]+)([kKmM]?)$/);
+    if(!match)throw Error('Invalid badge count');
+    const n=Number(match[1].replace(/\s/g,'').replace(/,/g,''));
+    if(!Number.isFinite(n))throw Error('Invalid number');
+    return Math.round(n*(match[2].toLowerCase()==='k'?1000:match[2].toLowerCase()==='m'?1000000:1));
+  }
+  try{
+    const total=await github();
+    countEl.textContent=fmt(total);
+    statusEl.textContent='GitHub Releases';
+  }catch(primaryError){
+    try{
+      const total=await shields();
+      countEl.textContent=fmt(total);
+      statusEl.textContent='GitHub Releases (záložní zdroj)';
+    }catch(fallbackError){
+      countEl.textContent='—';
+      statusEl.textContent=L().unavailable;
+      console.warn('MY VIBE: download count unavailable',primaryError,fallbackError);
+    }
+  }
+}
 downloads();
 const RECEIVER_EMAIL='radek07@post.cz';
 const form=document.querySelector('#mv-contact');
@@ -383,4 +431,4 @@ new MutationObserver(update).observe(feed,{childList:true});
 update();
 })();
 </script>
-</body></html>
+</body></htm
